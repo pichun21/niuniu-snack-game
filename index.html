@@ -98,7 +98,7 @@ end=document.querySelector('#end'), arena=document.querySelector('#arena'), dog=
 scoreEl=document.querySelector('#score'), timeEl=document.querySelector('#time'), livesEl=document.querySelector('#lives'),
 comboEl=document.querySelector('#combo');
 let score=0,lives=3,combo=0,time=30,level=1,running=false,last=0,spawnT=0,items=[],dogX=0,timer,feverUntil=0,soundOn=true,specialSchedule=[],spawnCount=0,caughtFood=0,hitBones=0,spawnedBones=0,maxCombo=0,speedUntil=0;
-let audioCtx=null;
+let audioCtx=null,bgmTimer=null,bgmStep=0;
 function unlockAudio(){
  if(!soundOn)return;
  try{
@@ -119,6 +119,34 @@ function beep(freq=500,dur=.07){
    o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+dur);
  }catch(e){}
 }
+
+function tone(freq,dur=.12,vol=.018,type='sine',when=0){
+ if(!soundOn||!audioCtx)return;
+ try{
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain(),t=audioCtx.currentTime+when;
+  o.type=type;o.frequency.setValueAtTime(freq,t);
+  g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.001,t+dur);
+  o.connect(g);g.connect(audioCtx.destination);o.start(t);o.stop(t+dur);
+ }catch(e){}
+}
+function bgmTick(){
+ if(!running||!soundOn||!audioCtx)return;
+ // Original light, bouncy 8-step loop. Levels add layers without changing the melody.
+ const melody=[523.25,659.25,783.99,659.25,587.33,698.46,783.99,698.46];
+ const bass=[130.81,130.81,146.83,146.83,174.61,174.61,146.83,146.83];
+ const i=bgmStep%8;
+ tone(melody[i],.13,.014,'triangle');
+ if(i%2===0)tone(bass[i],.18,.012,'sine');
+ if(level>=2&&i%2===1)tone(1046.5,.035,.006,'square');
+ if(level>=3)tone(i%2?1567.98:1318.51,.025,.0045,'square');
+ bgmStep++;
+}
+function startBgm(){
+ stopBgm();if(!soundOn)return;unlockAudio();bgmStep=0;
+ bgmTick();bgmTimer=setInterval(bgmTick,250); // ~120 BPM, eighth-note pulse
+}
+function stopBgm(){if(bgmTimer){clearInterval(bgmTimer);bgmTimer=null}}
+
 function sparks(x,y,bad=false){for(let i=0;i<7;i++){let q=document.createElement('div');q.className='fx';q.textContent=bad?'💥':'✨';q.style.left=x+'px';q.style.top=y+'px';q.style.setProperty('--dx',(Math.random()*90-45)+'px');q.style.setProperty('--dy',(Math.random()*-80-15)+'px');arena.appendChild(q);setTimeout(()=>q.remove(),600)}}
 
 const types=[
@@ -164,7 +192,7 @@ function reset(){
  if(time<=5&&time>0){timeEl.classList.remove('countdown');void timeEl.offsetWidth;timeEl.classList.add('countdown');beep(time<=3?820:690,.055)}
  if(time<=0)finish()},1000);
  comboEl.style.opacity=0;
- last=performance.now();spawnT=0;requestAnimationFrame(loop);
+ last=performance.now();spawnT=0;startBgm();requestAnimationFrame(loop);
 }
 function spawn(){
  const maxOnScreen=level===1?5:level===2?6:7;
@@ -243,7 +271,7 @@ function move(clientX){if(!running)return;const r=game.getBoundingClientRect();d
 game.addEventListener('pointerdown',e=>{if(running){game.setPointerCapture?.(e.pointerId);move(e.clientX)}});
 game.addEventListener('pointermove',e=>{if(e.buttons||e.pointerType==='touch')move(e.clientX)});
 function finish(){
- if(!running)return;running=false;clearInterval(timer);items.forEach(i=>i.el.remove());items=[];
+ if(!running)return;running=false;clearInterval(timer);stopBgm();items.forEach(i=>i.el.remove());items=[];
  play.style.display='none';document.querySelector('#finalScore').textContent=score;
  const dodged=Math.max(0,spawnedBones-hitBones);
  document.querySelector('#statFood').textContent=caughtFood;
@@ -254,7 +282,7 @@ function finish(){
  let title=score<180?'妞妞還沒吃飽 🥺':score<350?'零食捕手 🐩':score<550?'超級飼養員 ✨':'傳說級飼養員 👑';
  document.querySelector('#rank').textContent=title;
 }
-document.querySelector('#soundBtn').onclick=(e)=>{e.stopPropagation();soundOn=!soundOn;e.currentTarget.textContent=soundOn?'🔊':'🔇';if(soundOn){unlockAudio();beep(700,.1)}};
+document.querySelector('#soundBtn').onclick=(e)=>{e.stopPropagation();soundOn=!soundOn;e.currentTarget.textContent=soundOn?'🔊':'🔇';if(soundOn){unlockAudio();beep(700,.1);if(running)startBgm()}else stopBgm()};
 document.querySelector('#startBtn').onclick=()=>{unlockAudio();beep(620,.08);reset()};
 document.querySelector('#again').onclick=()=>{unlockAudio();beep(620,.08);reset()};
 </script>
