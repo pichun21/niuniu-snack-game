@@ -129,6 +129,19 @@ function tone(freq,dur=.12,vol=.018,type='sine',when=0){
   o.connect(g);g.connect(audioCtx.destination);o.start(t);o.stop(t+dur);
  }catch(e){}
 }
+function playEndJingle(isNewBest=false){
+ if(!soundOn)return;unlockAudio();
+ // Short, warm result-card cadence: clear ending without sounding like an alarm.
+ tone(523.25,.16,.035,'triangle',0);
+ tone(659.25,.16,.035,'triangle',.16);
+ tone(783.99,.38,.042,'triangle',.32);
+ tone(392.00,.42,.016,'sine',.32);
+ if(isNewBest){
+  tone(987.77,.13,.032,'triangle',.72);
+  tone(1174.66,.32,.038,'triangle',.86);
+ }
+}
+
 function bgmTick(){
  if(!running||!soundOn||!audioCtx)return;
  // Original light, bouncy 8-step loop. Levels add layers without changing the melody.
@@ -277,8 +290,9 @@ function finish(){
  document.querySelector('#statFood').textContent=caughtFood;
  document.querySelector('#statDodge').textContent=dodged;
  document.querySelector('#statCombo').textContent='×'+maxCombo;
- const best=Math.max(score,+(localStorage.niuniuBest||0));localStorage.niuniuBest=best;document.querySelector('#best').textContent=best;
- beep(520,.12);setTimeout(()=>{end.style.display='flex'},400);
+ const oldBest=+(localStorage.niuniuBest||0),isNewBest=score>oldBest;
+ const best=Math.max(score,oldBest);localStorage.niuniuBest=best;document.querySelector('#best').textContent=best;
+ playEndJingle(isNewBest);setTimeout(()=>{end.style.display='flex'},400);
  let title=score<180?'妞妞還沒吃飽 🥺':score<350?'零食捕手 🐩':score<550?'超級飼養員 ✨':'傳說級飼養員 👑';
  document.querySelector('#rank').textContent=title;
 }
