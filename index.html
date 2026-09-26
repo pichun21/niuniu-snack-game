@@ -84,7 +84,7 @@ const game=document.querySelector('#game'), start=document.querySelector('#start
 end=document.querySelector('#end'), arena=document.querySelector('#arena'), dog=document.querySelector('#dog'),
 scoreEl=document.querySelector('#score'), timeEl=document.querySelector('#time'), livesEl=document.querySelector('#lives'),
 comboEl=document.querySelector('#combo');
-let score=0,lives=3,combo=0,time=30,level=1,running=false,last=0,spawnT=0,items=[],dogX=0,timer,feverUntil=0,soundOn=true;
+let score=0,lives=3,combo=0,time=30,level=1,running=false,last=0,spawnT=0,items=[],dogX=0,timer,feverUntil=0,soundOn=true,specialSchedule=[],spawnCount=0;
 let audioCtx=null;
 function unlockAudio(){
  if(!soundOn)return;
@@ -110,13 +110,12 @@ function sparks(x,y,bad=false){for(let i=0;i<7;i++){let q=document.createElement
 
 const types=[
  {e:'🍠',pts:10,w:.25},{e:'🐟',pts:20,w:.21},{e:'🦴',bad:true,w:.16},
- {e:'🥕',pts:15,w:.10},{e:'🍗',pts:30,w:.14},{e:'⭐',star:true,w:.08},{e:'❤️',heart:true,w:.06}
+ {e:'🥕',pts:15,w:.10},{e:'🍗',pts:30,w:.14}
 ];
 function pick(){
  let pool=types.map(t=>({...t}));
  for(const t of pool){
-   if(t.bad)t.w=level===1?.08:level===2?.16:.23;
-   if(t.star||t.heart)t.w=level===1?.02:t.w;
+   if(t.bad)t.w=level===1?.10:level===2?.18:.25;
  }
  let total=pool.reduce((a,t)=>a+t.w,0),r=Math.random()*total,a=0;
  for(const t of pool){a+=t.w;if(r<=a)return t}return pool[0];
@@ -128,24 +127,53 @@ function showLevel(n){
  beep(n===2?700:850,.13);setTimeout(()=>b.style.opacity=0,1100);
 }
 function reset(){
- score=0;lives=3;combo=0;time=30;level=1;running=true;feverUntil=0;document.querySelector('#fever').classList.remove('on');items.forEach(x=>x.el.remove());items=[];
+ score=0;lives=3;combo=0;time=30;level=1;running=true;feverUntil=0;spawnCount=0;
+ specialSchedule=[
+   {at:8+Math.floor(Math.random()*5),kind:'star',done:false},
+   {at:19+Math.floor(Math.random()*5),kind:'star',done:false},
+   {at:14+Math.floor(Math.random()*5),kind:'heart',done:false}
+ ];
+ document.querySelector('#fever').classList.remove('on');items.forEach(x=>x.el.remove());items=[];
  scoreEl.textContent=0;timeEl.textContent=30;livesEl.textContent='❤️❤️❤️';comboEl.style.opacity=0;
  start.style.display='none';end.style.display='none';play.style.display='block';
  dogX=(game.clientWidth-98)/2; dog.style.left=dogX+'px';dog.style.transform='none';
  clearInterval(timer);timer=setInterval(()=>{if(!running)return;time--;timeEl.textContent=time;
+ const elapsed=30-time;
+ for(const sp of specialSchedule){if(!sp.done && elapsed>=sp.at){sp.done=true;spawnSpecial(sp.kind)}}
  if(time===20)showLevel(2);
  if(time===10)showLevel(3);
  if(time===10){let l=document.querySelector('#last10');l.style.opacity=1;l.animate([{transform:'scale(.7)'},{transform:'scale(1.15)'},{transform:'scale(1)'}],{duration:500});beep(760,.16);setTimeout(()=>l.style.opacity=0,1200)}
  if(time<=0)finish()},1000);
- comboEl.textContent='🍠 🐟 🍗 接住！　🚫 🦴 躲開！';
- comboEl.style.opacity=1;
- setTimeout(()=>{ if(running) comboEl.style.opacity=0; },1800);
+ comboEl.style.opacity=0;
  last=performance.now();spawnT=0;requestAnimationFrame(loop);
 }
 function spawn(){
- const t=pick(),el=document.createElement('div');el.className='item';el.textContent=t.e;
- const x=12+Math.random()*(game.clientWidth-65);el.style.left=x+'px';arena.appendChild(el);
- items.push({el,x,y:72,v:145+Math.random()*85,type:t,sway:(level===3&&t.bad)?(25+Math.random()*25):0,phase:Math.random()*6.28});
+ const maxOnScreen=level===1?5:level===2?6:7;
+ if(items.filter(i=>!i.dead).length>=maxOnScreen)return;
+ const t=pick();
+ let x=12+Math.random()*(game.clientWidth-65);
+ // Avoid unfair bone walls: don't spawn a bone too close to another high bone.
+ if(t.bad){
+   const nearbyBones=items.filter(i=>!i.dead&&i.type.bad&&i.y<230);
+   for(let tries=0;tries<8;tries++){
+     const candidate=12+Math.random()*(game.clientWidth-65);
+     if(nearbyBones.every(b=>Math.abs(candidate-b.x)>95)){x=candidate;break}
+   }
+   // If the top area is already crowded with danger, turn this spawn into food.
+   if(nearbyBones.length>=2){
+     const foods=types.filter(v=>!v.bad&&!v.star&&!v.heart);
+     Object.assign(t,foods[Math.floor(Math.random()*foods.length)]);
+   }
+ }
+ const el=document.createElement('div');el.className='item';el.textContent=t.e;
+ el.style.left=x+'px';arena.appendChild(el);
+ items.push({el,x,y:72,v:180,type:t,sway:(level===3&&t.bad)?32:0,phase:Math.random()*6.28});
+}
+function spawnSpecial(kind){
+ const t=kind==='star'?{e:'⭐',star:true}:{e:'❤️',heart:true};
+ const el=document.createElement('div');el.className='item';el.textContent=t.e;
+ const x=18+Math.random()*(game.clientWidth-72);el.style.left=x+'px';arena.appendChild(el);
+ items.push({el,x,y:72,v:180,type:t,sway:0,phase:0});
 }
 function rectHit(a,b){return a.left<b.right&&a.right>b.left&&a.top<b.bottom&&a.bottom>b.top}
 function pop(txt,x,y,bad=false){const p=document.createElement('div');p.className='pop';p.textContent=txt;p.style.left=x+'px';p.style.top=y+'px';p.style.color=bad?'#c6534f':'#91632f';arena.appendChild(p);setTimeout(()=>p.remove(),700)}
@@ -179,10 +207,10 @@ function loop(now){
  if(feverUntil && Date.now()>feverUntil){feverUntil=0;document.querySelector('#fever').classList.remove('on')}
  const dt=Math.min(.035,(now-last)/1000);last=now;spawnT+=dt;
  let gap=level===1?.72:level===2?.52:.36;
- if(spawnT>gap){spawnT=0;spawn();if(level===3&&Math.random()<.28)setTimeout(()=>running&&spawn(),120)}
+ if(spawnT>gap){spawnT=0;spawn();spawnCount++;if(level===3&&spawnCount%4===0)setTimeout(()=>running&&spawn(),120)}
  const d0=dog.getBoundingClientRect();
  const dr={left:d0.left-10,right:d0.right+10,top:d0.top-10,bottom:d0.bottom+8};
- for(const it of items){if(it.dead)continue;let speed=level===1?.88:level===2?1.12:1.38;it.y+=it.v*speed*dt;
+ for(const it of items){if(it.dead)continue;let speed=level===1?1.0:level===2?1.25:1.55;it.y+=it.v*speed*dt;
  let sx=it.sway?Math.sin(now/220+it.phase)*it.sway:0;
  it.el.style.transform=`translate(${sx}px,${it.y}px)`;const r=it.el.getBoundingClientRect();if(rectHit(r,dr))caught(it);else if(it.y>game.clientHeight+20){it.dead=true;it.el.remove();if(!it.type.bad)combo=0}}
  items=items.filter(i=>!i.dead);requestAnimationFrame(loop);
