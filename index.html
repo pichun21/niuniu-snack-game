@@ -46,7 +46,12 @@ h1{font-size:36px;margin:22px 0 2px;letter-spacing:1px}
 
 #time.countdown{animation:countPulse .28s ease-out}
 @keyframes countPulse{0%{transform:scale(1)}50%{transform:scale(1.22)}100%{transform:scale(1)}}
-.roundstats{margin-top:10px;font-size:13px;line-height:1.7;color:#806c5d;background:#f7f1e5;border-radius:16px;padding:8px 12px}
+.roundstats{margin-top:12px;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;background:#f7f1e5;border-radius:18px;padding:11px 8px;color:#806c5d}
+
+.roundstats>div{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}
+.roundstats .statIcon{font-size:22px;line-height:1.1}
+.roundstats b{font-size:21px;color:#6b4d3b;line-height:1.15}
+.roundstats small{font-size:11px;font-weight:700;white-space:nowrap}
 </style>
 </head>
 <body><div id="app"><main class="game" id="game">
@@ -76,7 +81,11 @@ h1{font-size:36px;margin:22px 0 2px;letter-spacing:1px}
 <h2>妞妞吃飽啦！</h2>
 <div class="small">本次得分</div>
 <div class="scorebig" id="finalScore">0</div>
-<div class="small">最高紀錄：<b id="best">0</b></div><div class="roundstats" id="roundStats">接到 0 個零食　｜　躲過 0 根骨頭　｜　最高 Combo ×0</div>
+<div class="small">最高紀錄：<b id="best">0</b></div><div class="roundstats" id="roundStats">
+  <div><span class="statIcon">🍠</span><b id="statFood">0</b><small>接到零食</small></div>
+  <div><span class="statIcon">🦴</span><b id="statDodge">0</b><small>躲過骨頭</small></div>
+  <div><span class="statIcon">🔥</span><b id="statCombo">×0</b><small>最高 Combo</small></div>
+</div>
 <div id="rank" style="font-weight:900;font-size:20px;margin-top:14px"></div><br>
 <button class="primary" id="again" type="button" onclick="reset()">再玩一次 ↻</button>
 </div>
@@ -88,7 +97,7 @@ const game=document.querySelector('#game'), start=document.querySelector('#start
 end=document.querySelector('#end'), arena=document.querySelector('#arena'), dog=document.querySelector('#dog'),
 scoreEl=document.querySelector('#score'), timeEl=document.querySelector('#time'), livesEl=document.querySelector('#lives'),
 comboEl=document.querySelector('#combo');
-let score=0,lives=3,combo=0,time=30,level=1,running=false,last=0,spawnT=0,items=[],dogX=0,timer,feverUntil=0,soundOn=true,specialSchedule=[],spawnCount=0,caughtFood=0,hitBones=0,spawnedBones=0,maxCombo=0;
+let score=0,lives=3,combo=0,time=30,level=1,running=false,last=0,spawnT=0,items=[],dogX=0,timer,feverUntil=0,soundOn=true,specialSchedule=[],spawnCount=0,caughtFood=0,hitBones=0,spawnedBones=0,maxCombo=0,speedUntil=0;
 let audioCtx=null;
 function unlockAudio(){
  if(!soundOn)return;
@@ -131,11 +140,12 @@ function showLevel(n){
  beep(n===2?700:850,.13);setTimeout(()=>b.style.opacity=0,1100);
 }
 function reset(){
- score=0;lives=3;combo=0;time=30;level=1;running=true;feverUntil=0;spawnCount=0;caughtFood=0;hitBones=0;spawnedBones=0;maxCombo=0;
+ score=0;lives=3;combo=0;time=30;level=1;running=true;feverUntil=0;spawnCount=0;caughtFood=0;hitBones=0;spawnedBones=0;maxCombo=0;speedUntil=0;
  specialSchedule=[
    {at:8+Math.floor(Math.random()*5),kind:'star',done:false},
    {at:19+Math.floor(Math.random()*5),kind:'star',done:false},
-   {at:14+Math.floor(Math.random()*5),kind:'heart',done:false}
+   {at:14+Math.floor(Math.random()*5),kind:'heart',done:false},
+   {at:13+Math.floor(Math.random()*5),kind:'speed',done:false}
  ];
  document.querySelector('#fever').classList.remove('on');items.forEach(x=>x.el.remove());items=[];
  scoreEl.textContent=0;timeEl.textContent=30;livesEl.textContent='❤️❤️❤️';comboEl.style.opacity=0;
@@ -180,7 +190,7 @@ function spawn(){
  items.push({el,x,y:72,v:180,type:t,sway:(level===3&&t.bad)?32:0,phase:Math.random()*6.28});
 }
 function spawnSpecial(kind){
- const t=kind==='star'?{e:'⭐',star:true}:{e:'❤️',heart:true};
+ const t=kind==='star'?{e:'⭐',star:true}:kind==='heart'?{e:'❤️',heart:true}:{e:'⚡',speed:true};
  const el=document.createElement('div');el.className='item';el.textContent=t.e;
  const x=18+Math.random()*(game.clientWidth-72);el.style.left=x+'px';arena.appendChild(el);
  items.push({el,x,y:72,v:180,type:t,sway:0,phase:0});
@@ -203,8 +213,12 @@ function caught(it){
    feverUntil=now+5000;document.querySelector('#fever').classList.add('on');
    comboEl.textContent='FEVER！5秒雙倍分數 ⭐';comboEl.style.opacity=1;setTimeout(()=>comboEl.style.opacity=0,900);
    sparks(it.x,it.y);beep(900,.15);
+ } else if(it.type.speed){
+   speedUntil=now+3000;
+   comboEl.textContent='SPEED UP！3秒加速 ⚡';comboEl.style.opacity=1;
+   setTimeout(()=>comboEl.style.opacity=0,900);sparks(it.x,it.y);beep(1040,.15);
  } else {
-   caughtFood++;combo++;maxCombo=Math.max(maxCombo,combo);let mult=now<feverUntil?2:1;let bonus=combo>=5?5:0;let got=(it.type.pts+bonus)*mult;
+   caughtFood++;combo++;maxCombo=Math.max(maxCombo,combo);let mult=(now<feverUntil?2:1)*(now<speedUntil?1.5:1);let bonus=combo>=5?5:0;let got=Math.round((it.type.pts+bonus)*mult);
    score+=got;scoreEl.textContent=score;pop('+'+got,it.x,it.y);sparks(it.x,it.y);beep(combo>=10?820:560);
    dog.animate([{transform:'scale(1)'},{transform:'scale(1.1)'},{transform:'scale(1)'}],{duration:220});
    if(combo>=10 && feverUntil<now){feverUntil=now+5000;document.querySelector('#fever').classList.add('on');comboEl.textContent='FEVER！COMBO × '+combo+' 🔥';comboEl.style.opacity=1;setTimeout(()=>comboEl.style.opacity=0,800)}
@@ -220,7 +234,7 @@ function loop(now){
  if(spawnT>gap){spawnT=0;spawn();spawnCount++;if(level===3&&spawnCount%4===0)setTimeout(()=>running&&spawn(),120)}
  const d0=dog.getBoundingClientRect();
  const dr={left:d0.left+d0.width*.16,right:d0.right-d0.width*.16,top:d0.top+d0.height*.10,bottom:d0.bottom-d0.height*.08};
- for(const it of items){if(it.dead)continue;let speed=level===1?1.0:level===2?1.25:1.55;it.y+=it.v*speed*dt;
+ for(const it of items){if(it.dead)continue;let speed=(level===1?1.0:level===2?1.25:1.55)*(Date.now()<speedUntil?1.35:1);it.y+=it.v*speed*dt;
  let sx=it.sway?Math.sin(now/220+it.phase)*it.sway:0;
  it.el.style.transform=`translate(${sx}px,${it.y}px)`;const r=it.el.getBoundingClientRect();if(rectHit(r,dr))caught(it);else if(it.y>game.clientHeight+20){it.dead=true;it.el.remove();if(!it.type.bad)combo=0}}
  items=items.filter(i=>!i.dead);requestAnimationFrame(loop);
@@ -232,7 +246,9 @@ function finish(){
  if(!running)return;running=false;clearInterval(timer);items.forEach(i=>i.el.remove());items=[];
  play.style.display='none';document.querySelector('#finalScore').textContent=score;
  const dodged=Math.max(0,spawnedBones-hitBones);
- document.querySelector('#roundStats').textContent=`接到 ${caughtFood} 個零食　｜　躲過 ${dodged} 根骨頭　｜　最高 Combo ×${maxCombo}`;
+ document.querySelector('#statFood').textContent=caughtFood;
+ document.querySelector('#statDodge').textContent=dodged;
+ document.querySelector('#statCombo').textContent='×'+maxCombo;
  const best=Math.max(score,+(localStorage.niuniuBest||0));localStorage.niuniuBest=best;document.querySelector('#best').textContent=best;
  beep(520,.12);setTimeout(()=>{end.style.display='flex'},400);
  let title=score<180?'妞妞還沒吃飽 🥺':score<350?'零食捕手 🐩':score<550?'超級飼養員 ✨':'傳說級飼養員 👑';
