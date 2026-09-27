@@ -72,6 +72,10 @@ img{
 #mission{position:absolute;z-index:16;top:70px;left:50%;transform:translateX(-50%);background:#fffdf8e8;border:2px solid #fff;border-radius:999px;padding:7px 12px;font-size:12px;font-weight:900;white-space:nowrap;box-shadow:0 4px 14px #0001}
 #stageResult{display:none;margin:8px 0 2px;font-weight:900;color:#9a683d}.nextStage{display:none;margin-top:10px}
 
+
+.playHome{position:absolute;z-index:70;left:10px;bottom:max(18px,env(safe-area-inset-bottom));width:44px;height:44px;border:0;border-radius:50%;background:#fffdf8dd;color:#76533f;font-size:25px;font-weight:900;box-shadow:0 5px 16px #0002}
+#trafficLight{position:absolute;z-index:60;top:92px;left:50%;transform:translateX(-50%);padding:8px 15px;border-radius:999px;background:#fffdf0e8;font-weight:1000;font-size:18px;box-shadow:0 5px 16px #0002;pointer-events:none}
+.item.fake{filter:grayscale(1);opacity:.48}
 </style>
 </head>
 <body><div id="app"><main class="game" id="game">
@@ -89,6 +93,7 @@ img{
 <button class="stageBack" id="stageBack" type="button">← 回首頁</button>
 </section>
 <section id="play" class="screen">
+<button id="playHome" class="playHome" type="button" aria-label="返回首頁">⌂</button>
 <div class="hud">
 <div class="pill">⏱ <span id="time">30</span>s</div>
 <div class="pill">⭐ <span id="score">0</span></div>
@@ -124,13 +129,13 @@ end=document.querySelector('#end'), arena=document.querySelector('#arena'), dog=
 scoreEl=document.querySelector('#score'), timeEl=document.querySelector('#time'), livesEl=document.querySelector('#lives'),
 comboEl=document.querySelector('#combo');
 let score=0,lives=3,combo=0,time=30,level=1,running=false,last=0,spawnT=0,items=[],dogX=0,timer,feverUntil=0,soundOn=true,specialSchedule=[],spawnCount=0,caughtFood=0,hitBones=0,spawnedBones=0,maxCombo=0,speedUntil=0;
-let gameMode='classic',stage=1,sweetCaught=0,forbiddenHits=0;
+let gameMode='classic',stage=1,sweetCaught=0,forbiddenHits=0,trafficGreen=true,trafficTimer=null,fakeHits=0;
 const stages=[
  {name:'零食時間',icon:'🍠',desc:'接零食、躲骨頭，先熟悉妞妞！',goal:'得到 350 分',stars:[350,500,650]},
  {name:'今天不准吃魚！',icon:'🐟',desc:'這一關魚也要躲，別被習慣騙了。',goal:'避開魚，得到 300 分',stars:[300,450,600]},
- {name:'地瓜大豐收',icon:'🍠',desc:'其他照吃，但地瓜才是今天主角。',goal:'接到 6 個地瓜',stars:[6,10,14]},
+ {name:'紅綠燈',icon:'🚦',desc:'綠燈可以吃，紅燈碰到零食就扣愛心！',goal:'看燈號行動，撐到時間結束',stars:[1,2,3]},
  {name:'骨頭雨來了！',icon:'🦴',desc:'骨頭變多，撐到最後就是過關。',goal:'活到時間結束',stars:[1,2,3]},
- {name:'妞妞減肥日',icon:'🐩',desc:'不能貪心！30 秒剛好吃 10 個最好。',goal:'剛好接 10 個零食',stars:[6,8,10]}
+ {name:'真假零食',icon:'👀',desc:'灰灰的假零食不能吃！先看清楚再接。',goal:'避開假零食，撐到時間結束',stars:[1,2,3]}
 ];
 let audioCtx=null,bgmTimer=null,bgmStep=0;
 function unlockAudio(){
@@ -217,7 +222,8 @@ function showLevel(n){
  beep(n===2?700:850,.13);setTimeout(()=>b.style.opacity=0,1100);
 }
 function reset(){
- score=0;lives=3;combo=0;time=30;level=1;running=true;feverUntil=0;spawnCount=0;caughtFood=0;hitBones=0;spawnedBones=0;maxCombo=0;speedUntil=0;sweetCaught=0;forbiddenHits=0;
+ score=0;lives=3;combo=0;time=30;level=1;running=true;feverUntil=0;spawnCount=0;caughtFood=0;hitBones=0;spawnedBones=0;maxCombo=0;speedUntil=0;sweetCaught=0;forbiddenHits=0;fakeHits=0;trafficGreen=true;
+ clearInterval(trafficTimer);document.querySelector('#trafficLight')?.remove();
  specialSchedule=[
    {at:8+Math.floor(Math.random()*5),kind:'star',done:false},
    {at:19+Math.floor(Math.random()*5),kind:'star',done:false},
@@ -229,6 +235,10 @@ function reset(){
  start.style.display='none';document.querySelector('#stageSelect').style.display='none';end.style.display='none';play.style.display='block';
  const mission=document.querySelector('#mission');
  if(gameMode==='challenge'){mission.style.display='block';mission.textContent='第 '+stage+' 關｜'+stages[stage-1].goal}else mission.style.display='none';
+ if(gameMode==='challenge'&&stage===3){
+  const tl=document.createElement('div');tl.id='trafficLight';tl.textContent='🟢 可以吃！';play.appendChild(tl);
+  trafficTimer=setInterval(()=>{if(!running)return;trafficGreen=!trafficGreen;tl.textContent=trafficGreen?'🟢 可以吃！':'🔴 不准吃！';beep(trafficGreen?760:260,.09)},3000);
+ }
  const moveTip=document.querySelector('#moveTip');
  moveTip.style.opacity=1;
  clearTimeout(window.moveTipTimer);
@@ -265,8 +275,10 @@ function spawn(){
  }
  if(t.bad)spawnedBones++;
  const el=document.createElement('div');el.className='item';el.textContent=t.e;
+ const isFake=(gameMode==='challenge'&&stage===5&&!t.bad&&!t.star&&!t.heart&&!t.speed&&Math.random()<.35);
+ if(isFake)el.classList.add('fake');
  el.style.left=x+'px';arena.appendChild(el);
- items.push({el,x,y:72,v:180,type:t,sway:(level===3&&t.bad)?32:0,phase:Math.random()*6.28});
+ items.push({el,x,y:72,v:180,type:t,fake:isFake,sway:(level===3&&t.bad)?32:0,phase:Math.random()*6.28});
 }
 function spawnSpecial(kind){
  const t=kind==='star'?{e:'⭐',star:true}:kind==='heart'?{e:'❤️',heart:true}:{e:'⚡',speed:true};
@@ -283,6 +295,12 @@ function caught(it){
    pop('這關魚不能吃！ -❤️',Math.max(12,it.x-70),it.y,true);sparks(it.x,it.y,true);beep(165,.12);
    dog.classList.remove('shake');void dog.offsetWidth;dog.classList.add('shake');if(navigator.vibrate)navigator.vibrate(80);
    if(lives<=0)finish();it.dead=true;it.el.remove();return;
+ }
+ if(gameMode==='challenge'&&stage===3&&!trafficGreen&&!it.type.bad&&!it.type.star&&!it.type.heart&&!it.type.speed){
+  lives--;combo=0;livesEl.textContent='❤️'.repeat(lives)+'🖤'.repeat(3-lives);pop('紅燈！不能吃 🚦',Math.max(12,it.x-65),it.y,true);beep(180,.12);if(navigator.vibrate)navigator.vibrate(80);if(lives<=0)finish();it.dead=true;it.el.remove();return;
+ }
+ if(gameMode==='challenge'&&stage===5&&it.fake){
+  fakeHits++;lives--;combo=0;livesEl.textContent='❤️'.repeat(lives)+'🖤'.repeat(3-lives);pop('假的！👀 -❤️',Math.max(12,it.x-55),it.y,true);beep(190,.12);if(navigator.vibrate)navigator.vibrate(80);if(lives<=0)finish();it.dead=true;it.el.remove();return;
  }
  if(it.type.bad){
    hitBones++;lives--;combo=0;livesEl.textContent='❤️'.repeat(lives)+'🖤'.repeat(3-lives);
@@ -304,7 +322,6 @@ function caught(it){
    setTimeout(()=>comboEl.style.opacity=0,900);sparks(it.x,it.y);beep(1040,.15);
  } else {
    caughtFood++;if(it.type.e==='🍠')sweetCaught++;
-   if(gameMode==='challenge'&&stage===5&&caughtFood>10){score=Math.max(0,score-20);pop('吃太多啦！ -20',it.x,it.y,true)}
    combo++;maxCombo=Math.max(maxCombo,combo);let mult=(now<feverUntil?2:1)*(now<speedUntil?1.5:1);let bonus=combo>=5?5:0;let got=Math.round((it.type.pts+bonus)*mult);
    score+=got;scoreEl.textContent=score;pop('+'+got,it.x,it.y);sparks(it.x,it.y);beep(combo>=10?820:560);
    dog.animate([{transform:'scale(1)'},{transform:'scale(1.1)'},{transform:'scale(1)'}],{duration:220});
@@ -330,7 +347,7 @@ function move(clientX){if(!running)return;const r=game.getBoundingClientRect();d
 game.addEventListener('pointerdown',e=>{if(running){game.setPointerCapture?.(e.pointerId);move(e.clientX)}});
 game.addEventListener('pointermove',e=>{if(e.buttons||e.pointerType==='touch')move(e.clientX)});
 function finish(){
- if(!running)return;running=false;clearInterval(timer);stopBgm();items.forEach(i=>i.el.remove());items=[];
+ if(!running)return;running=false;clearInterval(timer);clearInterval(trafficTimer);document.querySelector('#trafficLight')?.remove();stopBgm();items.forEach(i=>i.el.remove());items=[];
  play.style.display='none';document.querySelector('#finalScore').textContent=score;
  const dodged=Math.max(0,spawnedBones-hitBones);
  document.querySelector('#statFood').textContent=caughtFood;
@@ -346,19 +363,20 @@ function finish(){
  if(gameMode==='challenge'){
    let value=score,passed=false,stars=0;
    if(stage===2){passed=score>=300&&forbiddenHits===0;value=score}
-   else if(stage===3){value=sweetCaught;passed=value>=6}
+   else if(stage===3){value=lives;passed=time<=0&&lives>0}
    else if(stage===4){value=lives;passed=time<=0&&lives>0}
-   else if(stage===5){value=Math.min(caughtFood,20-caughtFood);passed=caughtFood===10}
+   else if(stage===5){value=lives;passed=time<=0&&lives>0}
    else passed=score>=350;
    const cfg=stages[stage-1];
-   if(stage===4){stars=lives>=3?3:lives>=2?2:lives>=1?1:0}
-   else if(stage===5){const diff=Math.abs(caughtFood-10);stars=diff===0?3:diff<=2?2:diff<=4?1:0}
+   if(stage===3||stage===4){stars=lives>=3?3:lives>=2?2:lives>=1?1:0}
+   else if(stage===5){stars=fakeHits===0&&lives>=3?3:fakeHits<=1&&lives>=2?2:lives>=1?1:0}
    else {for(const th of cfg.stars)if(value>=th)stars++}
    if(stage===2&&forbiddenHits>0)stars=Math.min(stars,1);
    sr.style.display='block';sr.textContent=(passed?'過關！ ':'再挑戰一次！ ')+('⭐'.repeat(stars)+'☆'.repeat(3-stars));
    if(passed){let unlocked=Math.max(+(localStorage.niuniuUnlocked||1),Math.min(5,stage+1));localStorage.niuniuUnlocked=unlocked;if(stage<5)next.style.display='inline-block'}
  }
 }
+document.querySelector('#playHome').onclick=(e)=>{e.stopPropagation();running=false;clearInterval(timer);clearInterval(trafficTimer);stopBgm();document.querySelector('#trafficLight')?.remove();items.forEach(i=>i.el.remove());items=[];play.style.display='none';end.style.display='none';document.querySelector('#stageSelect').style.display='none';start.style.display='flex';};
 document.querySelector('#soundBtn').onclick=(e)=>{e.stopPropagation();soundOn=!soundOn;e.currentTarget.textContent=soundOn?'🔊':'🔇';if(soundOn){unlockAudio();beep(700,.1);if(running)startBgm()}else stopBgm()};
 function renderStages(){
  const unlocked=+(localStorage.niuniuUnlocked||1),grid=document.querySelector('#stageGrid');grid.innerHTML='';
