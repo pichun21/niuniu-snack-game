@@ -76,6 +76,7 @@ img{
 .playHome{position:absolute;z-index:70;left:10px;bottom:max(18px,env(safe-area-inset-bottom));width:44px;height:44px;border:0;border-radius:50%;background:#fffdf8dd;color:#76533f;font-size:25px;font-weight:900;box-shadow:0 5px 16px #0002}
 #trafficLight{position:absolute;z-index:60;top:92px;left:50%;transform:translateX(-50%);padding:8px 15px;border-radius:999px;background:#fffdf0e8;font-weight:1000;font-size:18px;box-shadow:0 5px 16px #0002;pointer-events:none}
 .item.fake{filter:grayscale(1);opacity:.48}
+.endHome{display:block;margin:12px auto 0;border:0;background:transparent;color:#76533f;font-weight:900;font-size:16px;padding:8px 16px}
 </style>
 </head>
 <body><div id="app"><main class="game" id="game">
@@ -119,6 +120,7 @@ img{
 <div id="rank" style="font-weight:900;font-size:20px;margin-top:14px"></div><div id="stageResult"></div><br>
 <button class="primary" id="again" type="button">再玩一次 ↻</button>
 <button class="secondary nextStage" id="nextStage" type="button">下一關 →</button>
+<button class="endHome" id="endHome" type="button">← 返回首頁</button>
 </div>
 </section>
 </main></div>
@@ -259,6 +261,10 @@ function spawn(){
  const maxOnScreen=level===1?5:level===2?6:7;
  if(items.filter(i=>!i.dead).length>=maxOnScreen)return;
  const t=pick();
+ if(gameMode==='challenge'&&stage===3&&t.bad){
+   const foods=types.filter(v=>!v.bad&&!v.star&&!v.heart&&!v.speed);
+   Object.assign(t,foods[Math.floor(Math.random()*foods.length)]);
+ }
  let x=12+Math.random()*(game.clientWidth-65);
  // Avoid unfair bone walls: don't spawn a bone too close to another high bone.
  if(t.bad){
@@ -387,6 +393,7 @@ function renderStages(){
 document.querySelector('#startBtn').onclick=()=>{gameMode='classic';unlockAudio();beep(620,.08);reset()};
 document.querySelector('#challengeBtn').onclick=()=>{unlockAudio();beep(680,.08);renderStages();start.style.display='none';document.querySelector('#stageSelect').style.display='block'};
 document.querySelector('#stageBack').onclick=()=>{document.querySelector('#stageSelect').style.display='none';start.style.display='flex'};
+document.querySelector('#endHome').onclick=()=>{end.style.display='none';play.style.display='none';document.querySelector('#stageSelect').style.display='none';start.style.display='flex'};
 document.querySelector('#again').onclick=()=>{unlockAudio();beep(620,.08);reset()};
 document.querySelector('#nextStage').onclick=()=>{if(stage<5){stage++;unlockAudio();beep(720,.08);reset()}};
 
